@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Servarr Status</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#0d1117; --card:#161b22; --border:#30363d;
+  --text:#e6edf3; --muted:#8b949e; --green:#3fb950;
+  --red:#f85149; --yellow:#d29922;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.container { max-width:1000px; margin:auto; padding:40px 24px; }
+header { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:28px; }
+h1 { margin:0; font-size:30px; }
+.subtitle { color:var(--muted); margin-top:5px; }
+#updated { color:var(--muted); font-size:13px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px; }
+.card {
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:24px; box-shadow:0 5px 20px #0003;
+}
+.card-top { display:flex; justify-content:space-between; align-items:center; }
+.name { font-size:22px; font-weight:650; }
+.dot { width:14px; height:14px; border-radius:50%; background:var(--muted); }
+.dot.online { background:var(--green); box-shadow:0 0 12px #3fb95099; }
+.dot.offline { background:var(--red); box-shadow:0 0 12px #f8514999; }
+.dot.not_configured { background:var(--yellow); }
+.status { font-size:28px; font-weight:700; margin:25px 0 20px; }
+.online-text { color:var(--green); }
+.offline-text { color:var(--red); }
+.not-text { color:var(--yellow); }
+.info { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.info div { background:#0d1117; padding:12px; border-radius:9px; }
+.label { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; }
+.value { font-size:15px; }
+.error { margin-top:14px; color:var(--red); font-size:13px; word-break:break-word; }
+footer { color:var(--muted); text-align:center; margin-top:28px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div>
+    <h1>Servarr Status</h1>
+    <div class="subtitle">Sonarr & Radarr health monitor</div>
+  </div>
+  <div id="updated">Checking...</div>
+</header>
+
+<div class="grid" id="services"></div>
+<footer>Automatic refresh every 10 seconds</footer>
+</div>
+
+<script>
+const names = ["sonarr","radarr"];
+
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+function card(key, s) {
+  let cls=s.status;
+  let statusText =
+    s.status === "online" ? "ONLINE" :
+    s.status === "offline" ? "OFFLINE" : "NOT CONFIGURED";
+
+  let extra = "";
+  if (s.status === "online") {
+    extra = `
+      <div><span class="label">Response</span><span class="value">${esc(s.response_ms)} ms</span></div>
+      <div><span class="label">Version</span><span class="value">${esc(s.version)}</span></div>`;
+  } else if (s.status === "offline") {
+    extra = `
+      <div><span class="label">Response</span><span class="value">${esc(s.response_ms ?? "-")} ms</span></div>
+      <div><span class="label">Error</span><span class="value">${esc(s.error ?? "Unknown")}</span></div>`;
+  } else {
+    extra = `<div><span class="label">Status</span><span class="value">Configure URL and API key</span></div>`;
+  }
+
+  return `<div class="card">
+    <div class="card-top">
+      <div class="name">${esc(s.name)}</div>
+      <div class="dot ${cls}"></div>
+    </div>
+    <div class="status ${cls === "online" ? "online-text" : cls === "offline" ? "offline-text" : "not-text"}">${statusText}</div>
+    <div class="info">${extra}</div>
+    ${s.error && s.status !== "offline" ? `<div class="error">${esc(s.error)}</div>` : ""}
+  </div>`;
+}
+
+async function refresh() {
+  try {
+    const r=await fetch("/api/status",{cache:"no-store"});
+    const data=await r.json();
+    document.getElementById("services").innerHTML =
+      names.map(k => card(k,data.services[k])).join("");
+    document.getElementById("updated").textContent =
+      "Last check: " + new Date(data.timestamp*1000).toLocaleTimeString();
+  } catch(e) {
+    document.getElementById("updated").textContent="Status check failed";
+  }
+}
+
+refresh();
+setInterval(refresh,10000);
+</script>
+</body>
+</html>
